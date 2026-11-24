@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Hat Studio</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Hat Studio <span class="tag">BLE probe</span></h1>
+      <div class="status" id="status">Disconnected</div>
+    </header>
+
+    <main>
+      <section class="panel" id="connect-panel">
+        <h2>Device</h2>
+        <div class="row">
+          <button id="scan">Scan &amp; connect</button>
+          <button id="disconnect" disabled>Disconnect</button>
+        </div>
+        <div id="chooser" hidden>
+          <p class="hint">Devices found (power on the hat, close the phone app):</p>
+          <ul id="device-list"></ul>
+          <button id="cancel-scan" class="secondary">Cancel</button>
+        </div>
+      </section>
+
+      <section class="panel" id="gatt-panel">
+        <h2>Characteristics</h2>
+        <table>
+          <thead>
+            <tr><th>Service</th><th>Char</th><th>Properties</th><th></th></tr>
+          </thead>
+          <tbody id="chars"></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="send-panel">
+        <h2>Send raw bytes</h2>
+        <div class="row">
+          <select id="target"></select>
+          <label><input type="checkbox" id="with-response" /> with response</label>
+        </div>
+        <div class="row">
+          <input id="hex" placeholder="hex bytes, e.g. aa 55 01 00" spellcheck="false" />
+          <button id="send" disabled>Send</button>
+        </div>
+      </section>
+
+      <section class="panel" id="controls-panel">
+        <h2>Controls</h2>
+        <div class="row">
+          <label class="slider">Brightness <input type="range" id="brightness" min="0" max="100" value="50" disabled /></label>
+          <output id="brightness-val">50</output>
+        </div>
+        <div class="row">
+          <label class="slider">Effect <select id="effect" disabled></select></label>
+        </div>
+        <div class="row">
+          <label class="slider">Speed <input type="range" id="speed" min="0" max="100" value="50" disabled /></label>
+          <output id="speed-val">50</output>
+        </div>
+      </section>
+
+      <section class="panel" id="tests-panel">
+        <h2>Hat tests</h2>
+        <div class="row">
+          <button class="needs-conn" id="test-clear" disabled>0. Clear hat</button>
+          <button class="needs-conn" id="test-palette" disabled>1. Palette</button>
+          <button class="needs-conn" id="test-order" disabled>2. Drawing upload</button>
+          <button class="needs-conn" id="test-batch" disabled>4. Batched pixels</button>
+          <button class="needs-conn" id="test-row" disabled>5. Row test</button>
+        </div>
+        <div class="row">
+          <label>Write gap <input type="number" id="write-gap" min="0" max="500" step="5" style="width: 70px" /> ms</label>
+        </div>
+        <div class="row">
+          <input id="text-input" value="Hello" maxlength="24" spellcheck="false" />
+          <button class="needs-conn" id="send-text" disabled>3. Send text</button>
+        </div>
+      </section>
+
+      <section class="panel" id="compare-panel">
+        <h2>Compare: <span id="compare-title">run a test</span></h2>
+        <div class="compare">
+          <div>
+            <div class="hint">Expected (what the test sent)</div>
+            <div id="expected-grid"></div>
+          </div>
+          <div>
+            <div class="hint">Observed (paint what the hat shows — click/drag, right-click erases)</div>
+            <div id="observed-grid"></div>
+            <div class="row" id="swatches"></div>
+            <div class="row">
+              <button class="secondary" id="obs-copy">Start from expected</button>
+              <button class="secondary" id="obs-clear">Clear</button>
+              <button id="obs-save">Save observation</button>
+              <span class="hint" id="diff-count"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel grow" id="log-panel">
+        <h2>Log <button id="clear-log" class="secondary small">Clear</button> <button id="copy-log" class="secondary small">Copy</button></h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "hat-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop BLE controller and animation studio for Mini LedShow LED hats",
+  "main": "out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev --watch",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "check:served": "node scripts/check-served.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/web-bluetooth": "^0.0.22",
+    "electron": "^45.4.1",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}
