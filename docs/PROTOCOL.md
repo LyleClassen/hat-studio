@@ -56,6 +56,14 @@ The Honor phone ignored the standard HCI snoop setting and hid all app logcat ou
    ```
    The response is computed by JieLi's native `libjl_ota_auth.so` (`com.jieli.jl_bt_ota.impl.RcspAuth`). ✅ **It is not needed for LED control.** On 2026-11-24, Hat Studio connected from Windows with no handshake, and brightness and speed sweeps on A951 visibly changed the hat. The auth only gates the JieLi RCSP/OTA channel.
 3. An RCSP "get target info" request follows (`fe dc ba c0 03 …`). The 70-byte reply contains the device name `a241` near the end.
+
+### Chip identification ✅ (2026-11-25)
+The target-info reply is a TLV list. Each entry is `[len][type][value…]`, where `len` counts the type byte. The JieLi OTA library's parser in the app (`smali/h4/t.smali`, `parseTargetInfo`) maps these types:
+- `02 06 01`: **SdkType = 1**. In JieLi's firmware SDKs (`JL_rcsp/rcsp_bluetooth.h` in `fw-AC63_BT_SDK` and `fw-AW31N_BLE_SDK`), `SDK_TYPE_AC692X = 0x1` and it is selected only by `CONFIG_CPU_BR21`. For comparison, AC63x/BD19 reports `0x10` and AC695X/BR23 reports `0x3`. The hat is therefore a **BR21 / AC692X-family** SoC. The package marking (`AK24BP2A931`) is a JieLi lot code, not a part number.
+- `08 11 00 86 28 03 bd a2 41`: BLE address `86:28:03:BD:A2:41`. The advertised name suffix `A241` comes from the last two bytes of this address.
+- `02 0a 00`: the VID/PID attribute is too short, so the library ignores it.
+
+The official Jieli-Tech GitHub org does **not** host an AC692X/BR21 SDK. It only hosts AC63, AW30N/AW31N and AD1x/AD2x. Either way, an SDK would not contain the hat's LED application, which is the vendor's own firmware.
 4. LED commands go to **A951** (write without response is fine) and replies arrive on **A953**.
 
 ## LED packet framing ✅ (596/596 captured packets)
