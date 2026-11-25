@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -50,6 +50,27 @@ mkdirSync(logDir, { recursive: true })
 const logFile = join(logDir, 'probe.log')
 ipcMain.on('log:append', (_e, line: string) => {
   appendFileSync(logFile, line.endsWith('\n') ? line : line + '\n')
+})
+
+// Animation files: native open/save dialogs; the renderer only sees text.
+const animFilters = [{ name: 'Hat Studio animation', extensions: ['hatanim', 'json'] }]
+
+ipcMain.handle('file:save', async (e, defaultName: string, content: string) => {
+  const win = BrowserWindow.fromWebContents(e.sender)!
+  const r = await dialog.showSaveDialog(win, {
+    defaultPath: join(app.getPath('documents'), `${defaultName.replace(/[\\/:*?"<>|]/g, '_') || 'animation'}.hatanim`),
+    filters: animFilters
+  })
+  if (r.canceled || !r.filePath) return null
+  writeFileSync(r.filePath, content, 'utf8')
+  return r.filePath
+})
+
+ipcMain.handle('file:open', async (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender)!
+  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: animFilters })
+  if (r.canceled || !r.filePaths[0]) return null
+  return { path: r.filePaths[0], content: readFileSync(r.filePaths[0], 'utf8') }
 })
 
 ipcMain.on('bt:select', (_e, deviceId: string) => {

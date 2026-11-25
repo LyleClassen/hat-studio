@@ -5,10 +5,12 @@ import { isOtaUuid, LED_WRITE, shortUuid } from './ble/uuids'
 import { EFFECT_NAMES, setBrightness, setSpeed, type Effect } from './protocol/commands'
 import { parsePacket } from './protocol/packet'
 import { HatClient } from './protocol/client'
-import { blankFrame, Colour, HEIGHT, WIDTH, type Frame } from './protocol/frame'
+import { blankFrame, Colour, DisplayMode, HEIGHT, WIDTH, type Frame } from './protocol/frame'
 import { PixelGrid, PALETTE_CSS, PALETTE_NAMES, countDiff, frameToText } from './ui/grid'
 import { encodeGlyphs } from './protocol/text'
 import { renderGlyphs } from './render/glyphs'
+import { initStudio } from './editor/studio'
+import { HatSim } from './sim/hatsim'
 import type { HatApi } from '../../preload'
 
 declare global {
@@ -226,6 +228,44 @@ transport.on((e) => {
 
 // --- Hat tests: resolve the remaining protocol unknowns on real hardware ---
 const hat = new HatClient(transport)
+const studio = initStudio({ transport, hat, log })
+
+// --- Hat mirror: predicted panel contents from every command actually sent ---
+const sim = new HatSim()
+const mirrors = [...document.querySelectorAll<HTMLElement>('[data-mirror]')].map((el) => {
+  const g = new PixelGrid(false, 6)
+  el.appendChild(g.canvas)
+  return g
+})
+const mirrorLabels = [...document.querySelectorAll<HTMLElement>('[data-mirror-label]')]
+let mirrorQueued = false
+sim.onChange = () => {
+  if (mirrorQueued) return
+  mirrorQueued = true
+  requestAnimationFrame(() => {
+    mirrorQueued = false
+    const v = sim.visible ?? blankFrame()
+    mirrors.forEach((g) => g.set(v))
+    const label =
+      sim.mode === 'live'
+        ? 'Live canvas'
+        : sim.mode === 'drawing'
+          ? `Stored drawing${sim.drawingEffect ? ` (effect ${EFFECT_NAMES[sim.drawingEffect as Effect] ?? sim.drawingEffect}: the hat animates it, mirror shows it still)` : ''}`
+          : sim.mode === 'text'
+            ? 'Stored text (not simulated)'
+            : 'Unknown: press Clear hat to sync'
+    mirrorLabels.forEach((l) => (l.textContent = `${label} · ${sim.commands} commands`))
+  })
+}
+sim.onChange()
+$('mirror-snapshot').onclick = () => {
+  expect(`mirror snapshot (${sim.mode}, after ${sim.commands} commands)`, sim.visible ?? blankFrame())
+  log(`Mirror snapshot taken: ${sim.mode}, ${sim.commands} commands`)
+}
+transport.on((e) => {
+  if (e.type === 'tx') sim.feed(e.uuid, e.data)
+  else if (e.type === 'connected' || e.type === 'disconnected') sim.reset()
+})
 transport.on((e) => {
   if (e.type === 'connected' || e.type === 'disconnected') {
     document.querySelectorAll<HTMLButtonElement>('.needs-conn').forEach((b) => (b.disabled = e.type !== 'connected'))
@@ -234,6 +274,7 @@ transport.on((e) => {
 
 async function runTest(name: string, fn: () => Promise<void>): Promise<void> {
   log(`▶ ${name}`)
+  studio.player.invalidate() // probe tests change what the hat shows
   try {
     await fn()
     log(`✔ ${name} done`)
@@ -300,6 +341,7 @@ const gapInput = $<HTMLInputElement>('write-gap')
 gapInput.value = String(transport.writeGapMs)
 gapInput.onchange = () => {
   transport.writeGapMs = Math.max(0, Number(gapInput.value) || 0)
+  studio.player.costs.pixelMs = transport.writeGapMs + 1.5
   log(`Write gap set to ${transport.writeGapMs} ms`)
 }
 
@@ -319,9 +361,10 @@ async function drawLive(frame: Frame): Promise<void> {
 }
 
 $('test-clear').onclick = () =>
-  void runTest('clear hat (512 live pixels set to off)', async () => {
+  void runTest('clear hat (blank upload)', async () => {
     expect('clear', blankFrame())
-    await drawLive(blankFrame())
+    const r = await hat.clearScreen()
+    log(`Clear: blank drawing ${r}`)
   })
 
 $('test-palette').onclick = () =>
@@ -380,6 +423,70 @@ $('send-text').onclick = () =>
     const r = await hat.sendText(encodeGlyphs(glyphs), Number(effectSel.value))
     log(`Upload result: ${r}`)
   })
+
+$('test-persist').onclick = () =>
+  void runTest('live persistence', async () => {
+    // Does the LiveDraw canvas keep its pixels across a mode switch?
+    const f = blankFrame()
+    f[7 * WIDTH + 14] = Colour.Red
+    f[7 * WIDTH + 16] = Colour.Green
+    f[7 * WIDTH + 18] = Colour.Blue
+    expect('live persistence: 3 dots should REAPPEAR if the live canvas persists', f)
+    await hat.enterDrawMode()
+    for (let x = 0; x < WIDTH; x++) await hat.pixel(x, 7, f[7 * WIDTH + x]!)
+    log('Drew 3 dots live. Switching to stored drawing for 3 s…')
+    await hat.showMode(DisplayMode.Drawing)
+    await new Promise((r) => setTimeout(r, 3000))
+    await hat.enterDrawMode()
+    log('Back on the live canvas. Paint what you see now: 3 dots = persists, blank = clears.')
+  })
+
+$('test-upload-live').onclick = () =>
+  void runTest('upload vs live canvas', async () => {
+    // A: red 4×4 square streamed on the live canvas (left).
+    // B: blue 4×4 square uploaded as the stored drawing (right).
+    // Then return to the live canvas and see which one shows.
+    const a = blankFrame()
+    const b = blankFrame()
+    for (let y = 4; y < 8; y++)
+      for (let x = 4; x < 8; x++) {
+        a[y * WIDTH + x] = Colour.Red
+        b[y * WIDTH + x + 20] = Colour.Blue
+      }
+    expect('upload vs live: RED left = separate buffers · BLUE right = upload overwrote live canvas', a)
+    await hat.enterDrawMode()
+    for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) await hat.pixel(x, y, a[y * WIDTH + x]!)
+    log('Live canvas now shows the RED square (left). Uploading BLUE square (right) as stored drawing…')
+    await hat.sendDrawing(b, 'column', 0)
+    await new Promise((r) => setTimeout(r, 2000))
+    await hat.enterDrawMode()
+    log('Back on the live canvas. Paint what you see: red left, blue right, both, or blank.')
+  })
+
+$('test-erase').onclick = () =>
+  void runTest('erase + sustained stream', async () => {
+    // Row 3 and row 12 fully white, then erase every other pixel with colour 0.
+    // 128 pixel writes in a row: checks that 0 really erases and that a longer
+    // stream loses nothing.
+    const f = blankFrame()
+    for (let x = 0; x < WIDTH; x++) {
+      f[3 * WIDTH + x] = x % 2 === 0 ? Colour.White : Colour.Off
+      f[12 * WIDTH + x] = x % 2 === 0 ? Colour.Off : Colour.Green
+    }
+    expect('erase test: dotted white row 3 (even x), dotted green row 12 (odd x)', f)
+    await hat.enterDrawMode()
+    for (const y of [3, 12]) for (let x = 0; x < WIDTH; x++) await hat.pixel(x, y, y === 3 ? Colour.White : Colour.Green)
+    await new Promise((r) => setTimeout(r, 1000))
+    for (const y of [3, 12]) for (let x = 0; x < WIDTH; x++) if (f[y * WIDTH + x] === Colour.Off) await hat.pixel(x, y, Colour.Off)
+  })
+
+// --- Tabs ---
+document.querySelectorAll<HTMLButtonElement>('.tab').forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll<HTMLButtonElement>('.tab').forEach((t) => t.classList.toggle('selected', t === tab))
+    for (const id of ['studio-view', 'probe-view']) $(id).hidden = id !== tab.dataset['view']
+  }
+})
 
 $('clear-log').onclick = () => logEl.replaceChildren()
 $('copy-log').onclick = () => void navigator.clipboard.writeText(logEl.textContent ?? '')

@@ -11,24 +11,114 @@
   </head>
   <body>
     <header>
-      <h1>Hat Studio <span class="tag">BLE probe</span></h1>
-      <div class="status" id="status">Disconnected</div>
+      <h1>Hat Studio</h1>
+      <nav class="tabs">
+        <button class="tab selected" data-view="studio-view">Studio</button>
+        <button class="tab" data-view="probe-view">Probe</button>
+      </nav>
+      <div class="conn">
+        <span class="status" id="status">Disconnected</span>
+        <button id="scan">Scan &amp; connect</button>
+        <button id="disconnect" class="secondary" disabled>Disconnect</button>
+      </div>
+      <div id="chooser" class="chooser" hidden>
+        <p class="hint">Devices found (power on the hat, close the phone app):</p>
+        <ul id="device-list"></ul>
+        <button id="cancel-scan" class="secondary">Cancel</button>
+      </div>
     </header>
 
-    <main>
-      <section class="panel" id="connect-panel">
-        <h2>Device</h2>
+    <!-- ================= Studio ================= -->
+    <main id="studio-view" class="studio">
+      <aside class="panel studio-tools">
+        <h2>Tools</h2>
+        <div id="tool-bar" class="tool-bar"></div>
+        <h2>Colour</h2>
+        <div id="studio-palette" class="palette"></div>
+        <h2>Frame</h2>
         <div class="row">
-          <button id="scan">Scan &amp; connect</button>
-          <button id="disconnect" disabled>Disconnect</button>
+          <button class="secondary small" id="shift-left" title="Shift frame left (wraps)">◀</button>
+          <button class="secondary small" id="shift-up" title="Shift frame up (wraps)">▲</button>
+          <button class="secondary small" id="shift-down" title="Shift frame down (wraps)">▼</button>
+          <button class="secondary small" id="shift-right" title="Shift frame right (wraps)">▶</button>
         </div>
-        <div id="chooser" hidden>
-          <p class="hint">Devices found (power on the hat, close the phone app):</p>
-          <ul id="device-list"></ul>
-          <button id="cancel-scan" class="secondary">Cancel</button>
+        <div class="row">
+          <button class="secondary small" id="frame-clear">Clear frame</button>
+          <label><input type="checkbox" id="onion" checked /> Onion skin</label>
         </div>
+        <div class="row">
+          <button class="secondary small" id="undo" title="Ctrl+Z">↶ Undo</button>
+          <button class="secondary small" id="redo" title="Ctrl+Y">↷ Redo</button>
+        </div>
+        <p class="hint">Keys: B pencil · E eraser · L line · R rect · F filled · G fill · I pick · 0–7 colour · ←/→ frames · right-click erases</p>
+      </aside>
+
+      <section class="panel studio-main">
+        <div class="row">
+          <input id="anim-name" class="name" spellcheck="false" />
+          <button class="secondary small" id="anim-new">New</button>
+          <button class="secondary small" id="anim-open">Open…</button>
+          <button class="secondary small" id="anim-save">Save…</button>
+        </div>
+        <div id="studio-canvas"></div>
+        <div class="row">
+          <button class="secondary small" id="frame-add">+ Frame</button>
+          <button class="secondary small" id="frame-dup">⧉ Duplicate</button>
+          <button class="secondary small" id="frame-del">✕ Delete</button>
+          <button class="secondary small" id="frame-left">◀ Move</button>
+          <button class="secondary small" id="frame-right">Move ▶</button>
+          <label>Duration <input type="number" id="frame-duration" min="20" max="10000" step="10" /> ms</label>
+          <button class="secondary small" id="duration-all">Apply to all</button>
+        </div>
+        <div id="frame-strip" class="frame-strip"></div>
       </section>
 
+      <aside class="panel studio-hat">
+        <h2>Hat mirror</h2>
+        <div class="mirror" data-mirror></div>
+        <p class="hint mirror-label" data-mirror-label></p>
+        <h2>Preview</h2>
+        <button id="preview-play" class="secondary">▶ Preview</button>
+        <h2>Hat</h2>
+        <div class="row">
+          <label>Still effect <select id="studio-effect"></select></label>
+        </div>
+        <button id="send-still" disabled>Send frame as still</button>
+        <p class="hint">Stays on the hat after you disconnect.</p>
+        <div class="row">
+          <label>Playback
+            <select id="strategy">
+              <option value="smooth">Smooth – changed pixels only</option>
+              <option value="auto">Auto – fastest (big changes flicker)</option>
+              <option value="upload">Whole frames (flickers)</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>Erase
+            <select id="erase-order">
+              <option value="first">First – old pixels vanish at once</option>
+              <option value="interleave">Interleaved</option>
+              <option value="last">Last – new pixels appear first</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label title="Pause between pixel writes. 15 ms is verified lossless; lower is faster but the hat may drop pixels.">Pixel gap <input type="number" id="studio-gap" min="0" max="100" step="1" style="width: 60px" /> ms</label>
+        </div>
+        <div class="row">
+          <button id="play-hat" disabled>▶ Play on hat</button>
+          <button id="clear-hat" class="secondary" disabled title="Blank the hat in ~0.3 s (also blanks the stored still)">Clear hat</button>
+          <label><input type="checkbox" id="loop" checked /> Loop</label>
+        </div>
+        <p class="hint">Animations play from this PC while connected. Smooth overwrites only the pixels that change (black where something disappears), so nothing flickers; each changed pixel takes ~16 ms.</p>
+        <p class="hint" id="anim-estimate"></p>
+        <p class="studio-status" id="studio-status"></p>
+      </aside>
+    </main>
+
+    <!-- ================= Probe ================= -->
+    <main id="probe-view" class="probe" hidden>
       <section class="panel" id="gatt-panel">
         <h2>Characteristics</h2>
         <table>
@@ -74,6 +164,9 @@
           <button class="needs-conn" id="test-order" disabled>2. Drawing upload</button>
           <button class="needs-conn" id="test-batch" disabled>4. Batched pixels</button>
           <button class="needs-conn" id="test-row" disabled>5. Row test</button>
+          <button class="needs-conn" id="test-persist" disabled>6. Live persistence</button>
+          <button class="needs-conn" id="test-upload-live" disabled>7. Upload vs live</button>
+          <button class="needs-conn" id="test-erase" disabled>8. Erase test</button>
         </div>
         <div class="row">
           <label>Write gap <input type="number" id="write-gap" min="0" max="500" step="5" style="width: 70px" /> ms</label>
@@ -103,6 +196,14 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section class="panel" id="mirror-panel">
+        <h2>Hat mirror</h2>
+        <div class="mirror" data-mirror></div>
+        <p class="hint mirror-label" data-mirror-label></p>
+        <p class="hint">What the hat should show right now, rebuilt from every command actually sent. If the hat differs, it dropped or misread a command.</p>
+        <button class="secondary small" id="mirror-snapshot">Snapshot → Compare (as Expected)</button>
       </section>
 
       <section class="panel grow" id="log-panel">

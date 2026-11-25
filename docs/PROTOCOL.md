@@ -103,6 +103,12 @@ The panel is **32 × 16**. Live-draw coordinates in the capture reach x=31 and y
 | `03/01` | `01` | enter the drawing page; the reply is `01` |
 | `03/02` | `00 [y] [x] [colour]` | set one pixel immediately, with no reply. Captured examples: `03 02 00 04 00 0f 1f 02 ec 6b` (green at 31,15) and `… 00 00 00 01 de 13` (red at 0,0) |
 
+**The live canvas persists** ✅: after drawing live pixels, switching to the stored drawing (`03/01 03`) for 3 s and back (`03/01 01`), the live pixels reappeared unchanged (0-pixel diff, 2026-11-24). The live canvas and the stored drawing are separate buffers.
+
+**A drawing upload wipes the live canvas** ✅: probe test 7 (2026-11-24) drew a red square live, uploaded a blue square, then re-entered `03/01 01`. The screen was blank: the red square did not come back. Plain mode switches keep the live canvas, but uploads clear it. A blank-drawing upload is therefore a fast full clear, about 0.3 s compared with about 8 s for 512 live pixels. 🟡 Not checked: whether a deduplicated upload (reply `03`, no data sent) also clears it.
+
+**Animation without flicker:** a full drawing upload makes the hat redraw the whole screen, which shows as a visible flicker. Streaming only the changed pixels on the persistent live canvas, with `00` overwriting pixels that turn off, avoids it. Hat Studio's default "Smooth" playback works this way. It writes erasures first by default, because at ~16 ms per pixel, drawing first left visible trails. Erase order and pixel gap can be changed in the Studio panel.
+
 ## Uploads ✅ (all captured uploads reproduced byte-for-byte in `upload.test.ts`)
 1. A **header on A951** carries the **CRC-32C (Castagnoli) of the data**, big-endian:
    - Text `02/01`: `[size u16][effect][64][64][crc32c u32][00]`. Example: `02 01 00 0a 00 24 01 64 64 86 6b 32 db 00 70 a2`

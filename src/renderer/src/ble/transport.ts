@@ -12,6 +12,8 @@ export type TransportEvent =
   | { type: 'disconnected' }
   | { type: 'notify'; uuid: string; data: Uint8Array }
   | { type: 'log'; message: string }
+  /** A write that actually went out (after pacing), for the hat mirror. */
+  | { type: 'tx'; uuid: string; data: Uint8Array }
 
 type Listener = (e: TransportEvent) => void
 
@@ -121,8 +123,10 @@ export class BleTransport {
     // Copy into a fresh ArrayBuffer so callers can reuse their buffer.
     const buf = data.slice().buffer
     return this.enqueue(async () => {
-      if (withResponse) return info.char.writeValueWithResponse(buf)
-      await info.char.writeValueWithoutResponse(buf)
+      if (withResponse) await info.char.writeValueWithResponse(buf)
+      else await info.char.writeValueWithoutResponse(buf)
+      this.emit({ type: 'tx', uuid: uuid.toLowerCase(), data: new Uint8Array(buf) })
+      if (withResponse) return
       if (this.writeGapMs > 0) await new Promise((r) => setTimeout(r, this.writeGapMs))
     })
   }

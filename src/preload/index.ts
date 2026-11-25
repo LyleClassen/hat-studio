@@ -20,6 +20,14 @@ const api = {
   },
   appendLog(line: string): void {
     ipcRenderer.send('log:append', line)
+  },
+  /** Shows a save dialog; resolves to the saved path, or null if cancelled. */
+  saveFile(defaultName: string, content: string): Promise<string | null> {
+    return ipcRenderer.invoke('file:save', defaultName, content)
+  },
+  /** Shows an open dialog; resolves to the file, or null if cancelled. */
+  openFile(): Promise<{ path: string; content: string } | null> {
+    return ipcRenderer.invoke('file:open')
   }
 }
 

@@ -4,7 +4,7 @@ An open desktop controller for the cheap Bluetooth LED-matrix hats sold under th
 
 The official app only runs on phones. It can draw on the hat, scroll text and pick from a few built-in animations, but it **cannot upload custom animations**. Hat Studio aims to drive the hat from a desktop, and eventually to animate it, by reverse-engineering the BLE protocol and reimplementing it in an Electron app that uses Web Bluetooth.
 
-> **Status:** research prototype. The protocol for brightness, speed, effects, live pixel drawing, drawing uploads and text uploads is decoded and works from Windows. The UI is still mostly a probe and test bench, not a finished editor.
+> **Status:** research prototype. The protocol for brightness, speed, effects, live pixel drawing, drawing uploads and text uploads is decoded and works from Windows. The app has an early frame-based animation editor and player next to the original probe and test bench.
 
 The full, evidence-backed protocol write-up is in **[docs/PROTOCOL.md](docs/PROTOCOL.md)**. This README summarises it.
 
@@ -63,6 +63,8 @@ crc = CRC-16/MODBUS over all preceding bytes, big-endian
 - **Palette:** 0 off, 1 red, 2 green, 3 blue, 4 yellow, 5 magenta, 6 cyan, 7 white. It is a fixed palette, not RGB bits.
 - **One packet per BLE write.** Concatenated packets are ignored after the first.
 - **Live pixels need about 15 ms between writes.** Faster writes drop about half of them, so a full 512-pixel repaint takes about 8 s. Animation therefore has to send **only the pixels that changed**.
+- **The live canvas persists** across mode switches, but **a drawing upload wipes it**. Uploading a blank drawing is a fast full clear (about 0.3 s).
+- **A full upload flickers**, because the hat redraws the whole screen. Streaming changed pixels to the live canvas does not.
 
 ### Uploads (stored content the hat plays on its own)
 1. A header on `A951` carries the **CRC-32C** of the data. The hat replies `01` (send the data) or `03` (already stored, because it deduplicates by CRC).
@@ -89,7 +91,10 @@ npm test           # protocol unit tests (captured vectors)
 npm run typecheck
 ```
 
-Click **Scan & connect** and pick the `ledshow-…` device. The app then gives you brightness, speed and effect controls, a raw-bytes sender, a log, and a numbered set of **hat tests** (palette, drawing upload, row and pixel pacing, text). Each test has a compare grid for recording what the hat actually showed.
+Click **Scan & connect** and pick the `ledshow-…` device. The app then gives you:
+- **Studio:** a frame-based animation editor with pencil, line, rectangle, fill and shift tools, onion skinning, per-frame durations, and save/open as `.hatanim` files. The player streams the animation to the hat. **Smooth** (the default) sends only the changed pixels. **Upload** sends whole frames, which flicker. **Auto** chooses per frame. You can set the erase order and the pixel gap.
+- **Controls:** brightness, speed and effect, plus a raw-bytes sender and a log.
+- **Hat tests:** numbered probes (palette, drawing upload, row and pixel pacing, text). Each has a compare grid for recording what the hat actually showed. A built-in **hat simulator** predicts the expected screen from the exact bytes sent, so a mismatch shows a dropped write or a gap in the protocol model.
 
 > Windows note: run Vitest from an uppercase drive path (`C:\…`). A lowercase `c:` working directory breaks config loading.
 
@@ -99,6 +104,8 @@ Click **Scan & connect** and pick the `ledshow-…` device. The app then gives y
 src/main, src/preload          Electron shell
 src/renderer/src/ble           Web Bluetooth transport, UUIDs
 src/renderer/src/protocol      framing, CRCs, commands, uploads, text (with tests)
+src/renderer/src/editor        animation model, drawing tools, transfer planner, player, Studio UI
+src/renderer/src/sim           hat simulator (predicts the display from the bytes sent)
 src/renderer/src/render        bitmap glyphs for text uploads
 src/renderer/src/ui            compare grid
 docs/PROTOCOL.md               the full protocol notes
@@ -110,9 +117,13 @@ scripts/check-served.mjs       dev helper: detects a stale Vite module before ha
 - [x] Decode the framing, CRC, control commands and the live canvas
 - [x] Drawing and text uploads, byte-exact against captures
 - [x] Identify the SoC
-- [ ] Pixel editor and animation timeline
-- [ ] Flicker-free animation playback by streaming only changed pixels
+- [x] Pixel editor and frame-based animations (early)
+- [x] Flicker-free playback by streaming only changed pixels
+- [ ] Import animations from GIF
 - [ ] Desktop-side text rendering with arbitrary fonts
+
+## License
+[MIT](LICENSE)
 
 ## Disclaimer
 This is an independent interoperability project. It is not affiliated with the hat's manufacturer, the Mini LedShow app or JieLi Technology. All protocol knowledge comes from observing a device the author owns. Nothing here modifies or redistributes the device firmware or the vendor app.

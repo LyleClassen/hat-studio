@@ -125,6 +125,18 @@ export class HatClient {
     return this.upload(UploadType.Drawing, drawingHeader(packed, effect), packed)
   }
 
+  /**
+   * Blanks the live canvas in ~0.3 s by uploading an empty drawing (an upload
+   * wipes the live canvas, probe test 7), then shows the live canvas. Writing
+   * 512 off pixels would take ~8 s. Side effect: the stored drawing (what the
+   * hat shows on its own after disconnect) becomes blank.
+   */
+  async clearScreen(): Promise<'sent' | 'stored'> {
+    const r = await this.sendDrawing(new Uint8Array(512), 'column', 0x00)
+    await this.enterDrawMode()
+    return r
+  }
+
   /** Uploads text and shows it. Mirrors the app: switch to Text mode (03/01 04) first. */
   async sendText(glyphData: Uint8Array, effect = 0x01): Promise<'sent' | 'stored'> {
     await this.showMode(DisplayMode.Text)
